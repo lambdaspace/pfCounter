@@ -3,21 +3,28 @@
 from bs4 import BeautifulSoup
 from subprocess import Popen, PIPE
 
+staticMAC = []
+
 comm = Popen("./getDHCPlease.sh", shell=True, stdout=PIPE, stderr=PIPE, stdin=PIPE)
 stdout, stderr = comm.communicate()
 
 count = 0
 soup = BeautifulSoup(open('status_dhcp_leases.php','r').read(), "lxml")
 table = soup.find('table', attrs={'class':'table'})
-body = table.findAll("tbody")
-tr = []
-for group in body:
-    tr += group.findAll("tr")
-td = []
-for group in tr:
-    td += group.findAll("td")
-for i in td:
-    if 'online' in i:
+soupT = BeautifulSoup(str(table),"lxml")
+head = soupT.find('thead')
+body = soupT.find('tbody')
+headers = head.findAll('th')
+bodys = body.findAll('tr')
+final = []
+for i in range(len(bodys)):
+    tmp = []
+    bodys[i] = bodys[i].findAll('td')
+    tmp.append(str(bodys[i][2].getText()).translate(None, '\n\t'))
+    tmp.append(str(bodys[i][7].getText()).translate(None, '\n\t'))
+    final.append(tmp)
+for dataSet in final:
+    if dataSet[1]=='online' and dataSet[0] not in staticMAC:
         count += 1
 prevUs = open('lastHack.txt','r')
 prevUs_data = prevUs.read()
