@@ -1,3 +1,11 @@
+userspace:
+  cwd: ===
 macAddresses:
   - 00:00:00:00:00:00
   - 00:00:00:00:00:00
+pfSense:
+  user : ===
+  pass : ===
+mosquitto:
+  user : ===
+  pass : ===
