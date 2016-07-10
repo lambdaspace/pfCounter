@@ -1,20 +1,23 @@
 #!/usr/bin/env python2
 # -*- coding: <UTF-8> -*-
-from bs4 import BeautifulSoup
-from subprocess import Popen, PIPE
-import yaml
-import mechanize
-import urllib2
-import cookielib
+"""In a space with a pfSense Router, get #of active devices and misc. stats."""
 import ssl
 import os
+#import urllib2
+import cookielib
+from subprocess import Popen, PIPE
+from bs4 import BeautifulSoup
+import yaml
+import mechanize
 
 
-def getLeaseFile(currentDirectory, pfSenseKeySet):
+def get_lease_file(current_dir, pfSenseKeySet, pfSenseCfg):
+    """Login to pfSense, get DHCP Leases page and save it to a file."""
     cj = cookielib.CookieJar()
     br = mechanize.Browser()
     br.set_cookiejar(cj)
     br.set_handle_robots(False)
+    #Don't verify pfSense's cert signing authority
     try:
         _create_unverified_https_context = ssl._create_unverified_context
     except AttributeError:
@@ -23,25 +26,26 @@ def getLeaseFile(currentDirectory, pfSenseKeySet):
     else:
         # Handle target environment that doesn't support HTTPS verification
         ssl._create_default_https_context = _create_unverified_https_context
-    br.open("https://pfSense.techministry.gr")
+    br.open(pfSenseCfg['url'])
     br.select_form(nr=0)
     br.form['usernamefld'] = pfSenseKeySet['user']
     br.form['passwordfld'] = pfSenseKeySet['pass']
     br.submit()
-    htmlFilePath = currentDirectory + "/status_dhcp_leases.php"
-    with open(htmlFilePath,'w') as htmlFile:
+    htmlFilePath = current_dir + "/status_dhcp_leases.php"
+    with open(htmlFilePath, 'w') as htmlFile:
         htmlFile.write(br.response().read())
     return 0
 
 
-def parseHTML(currentDirectory):
+def parse_html(current_dir):
+    """Parse DHCP Leases page, return hosts by MAC and their state."""
     final = []
-    htmlFilePath = currentDirectory + "/status_dhcp_leases.php"
-    with open(htmlFilePath,'r') as lease_html:
+    htmlFilePath = current_dir + "/status_dhcp_leases.php"
+    with open(htmlFilePath, 'r') as lease_html:
         soup = BeautifulSoup(lease_html.read(), "lxml")
     #Get and parse the <table> element
     table = soup.find('table', attrs={'class':'table'})
-    soupT = BeautifulSoup(str(table),"lxml")
+    soupT = BeautifulSoup(str(table), "lxml")
     body = soupT.find('tbody')
     bodys = body.findAll('tr')
     for i in range(len(bodys)):
@@ -55,14 +59,18 @@ def parseHTML(currentDirectory):
     return final
 
 
-def mPublish(currentDirectory, mosquittoKeySet, topicPath, data):
-    command = "mosquitto_pub -h www.techministry.gr -u "
+def m_pub(current_dir, mosquittoKeySet, mqttCfg, topicPath, data):
+    """Publish at mqtt Instance"""
+    command = "mosquitto_pub -h "
+    command += mqttCfg['host']
+    command += " -u "
     command += mosquittoKeySet['user']
     command += " -P "
     command += mosquittoKeySet['pass']
     command += " --cafile "
-    command += currentDirectory
-    command += "/MQTT-CA-TM.crt  -t \""
+    command += current_dir
+    command += mqttCfg['cafile']
+    command += " -t \""
     command += topicPath
     command += "\" -m \""
     command += data
@@ -72,78 +80,84 @@ def mPublish(currentDirectory, mosquittoKeySet, topicPath, data):
     return 0
 
 
-def sendUsers(currentDirectory, mosquittoKeySet, noUsers):
-    topic = "techministry/spacestatus/hackers"
-    mPublish(currentDirectory, mosquittoKeySet, topic, str(noUsers))
+def send_users(current_dir, mqttKeySet, mqttCfg, noUsers):
+    """Construct /hackers subtopic & publish."""
+    topic = mqttCfg['topicRoot'] + "/hackers"
+    m_publish(current_dir, mqttKeySet, mqttCfg, topic, str(noUsers))
     return 0
 
 
-def sendNewMACs(currentDirectory, mosquittoKeySet, newMACs):
-    topic = "techministry/spacestatus/stats"
+def send_new_macs(current_dir, mqttKeySet, mqttCfg, newMACs):
+    """Construct /stats topic & publish."""
+    topic = mqttCfg['topicRoot'] + "/stats"
     data = str(len(newMACs))
-    mPublish(currentDirectory, mosquittoKeySet, topic, data)
+    m_publish(current_dir, mqttKeySet, mqttCfg, topic, data)
     return 0
 
 
-def handleNewMACs(currentDirectory, mosquittoKeySet, newMACs):
-    macFilePath = currentDirectory + "/uniqueMAC.yml"
-    with open(macFilePath,'a') as mac_file:
+def handle_new_macs(current_dir, mqttKeySet, mqttCfg, newMACs):
+    """Add new MACs to the yml file & publish"""
+    macFilePath = current_dir + "/uniqueMAC.yml"
+    with open(macFilePath, 'a') as mac_file:
         for macAddress in newMACs:
             macStr = "\n  - " + macAddress
             mac_file.write(macStr)
-    sendNewMACs(currentDirectory, mosquittoKeySet, newMACs)
+    send_new_macs(current_dir, mqttKeySet, mqttCfg, newMACs)
     return 0
 
 
-def handleUsers(currentDirectory, mosquittoKeySet, count):
-    #Check if users have changed
-    lastHackPath = currentDirectory + "/lastHack.txt"
+def handle_users(current_dir, mqttKeySet, mqttCfg, count):
+    """Check if #of users has changed & publish"""
+    lastHackPath = current_dir + "/lastHack.txt"
     try:
-        prevUs = open(lastHackPath,'r')
+        prevUs = open(lastHackPath, 'r')
     except IOError:
         prevUs_data = ""
     else:
         prevUs_data = prevUs.read()
         prevUs.close()
     if prevUs_data != str(count):
-        sendUsers(currentDirectory, mosquittoKeySet, count)
-        prevUs = open(lastHackPath,'w')
+        send_users(current_dir, mqttKeySet, mqttCfg, count)
+        prevUs = open(lastHackPath, 'w')
         prevUs.write(str(count))
 
 
 def main():
+    """Read configuration, pass around variables."""
     count = 0
     newMACs = []
-    #Read config file and get neutral MAC Addresses, keySets and currentDirectory
+    #Read config file and get neutral MAC Addresses, keySets and current_dir
     ymlPath = os.path.dirname(os.path.abspath(__file__)) + "/config.yml"
-    with open(ymlPath,'r') as ymlfile:
+    with open(ymlPath, 'r') as ymlfile:
         cfg = yaml.load(ymlfile)
     staticMAC = cfg['macAddresses']
     pfSenseKeySet = cfg['pfSense']
+    pfSenseCfg = cfg['pfSenseCfg']
     mosquittoKeySet = cfg['mosquitto']
-    currentDirectory = cfg['userspace']['cwd']
+    mqttCfg = cfg['mqttCfg']
+    current_dir = cfg['userspace']['cwd']
     #Read unique MACs that have been on the network (for statistics)
-    uniqueMACPath = currentDirectory + "/uniqueMAC.yml"
-    with open(uniqueMACPath,'r') as uniqueMACFile:
+    uniqueMACPath = current_dir + "/uniqueMAC.yml"
+    with open(uniqueMACPath, 'r') as uniqueMACFile:
         mac_file = yaml.load(uniqueMACFile)
     uniqueMACs = mac_file['uniqueMAC']
     if uniqueMACs is None:
         uniqueMACs = []
     #Run script to get the HTML containing the DHCP leases
-    getLeaseFile(currentDirectory, pfSenseKeySet)
+    get_lease_file(current_dir, pfSenseKeySet, pfSenseCfg)
     #Parse HTML
-    active_hosts = parseHTML(currentDirectory)
+    active_hosts = parse_html(current_dir)
     for dataSet in active_hosts:
         #If device is online and not one of the neutral device count one
-        if dataSet[1]=='online' and dataSet[0] not in staticMAC:
-                count += 1
-                if dataSet[0] not in uniqueMACs:
-                    newMACs.append(dataSet[0])
+        if dataSet[1] == 'online' and dataSet[0] not in staticMAC:
+            count += 1
+            if dataSet[0] not in uniqueMACs:
+                newMACs.append(dataSet[0])
     if newMACs:
-        handleNewMACs(currentDirectory, mosquittoKeySet, newMACs)
-    handleUsers(currentDirectory, mosquittoKeySet, count)
+        handle_new_macs(current_dir, mosquittoKeySet, mqttCfg, newMACs)
+    handle_users(current_dir, mosquittoKeySet, mqttCfg, count)
     #Final clean-up
-    command = "rm " + currentDirectory + "/status_dhcp_leases.php"
+    command = "rm " + current_dir + "/status_dhcp_leases.php"
     comm = Popen(command, shell=True, stdout=PIPE, stderr=PIPE, stdin=PIPE)
     stdout, stderr = comm.communicate()
 
