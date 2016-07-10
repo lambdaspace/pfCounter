@@ -10,10 +10,10 @@
 
 * A pfSense Router
 * A linux machine that will run 24/7 (a pi maybe?)
-* Mosquitto client installed on said machine
+* Mosquitto client installed on said machine (v1.4.9)
 * Python 2.7 installed on said machine
 * pip installed on said machine
-* An mqtt Broker
+* An mqtt Broker (v3.1)
 
 ## Deployment
 
