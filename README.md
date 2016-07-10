@@ -19,6 +19,7 @@
 
 * Clone this repo on your linux machie
 * Create a new user on your pfSense Router and only assign "WebCfg - Status: DHCP leases" to it
+* On your Linux machine navigate to the project forlder and give `pip install -r requirements.txt`
 * Rename config.yml.dist to config.yml
 * Edit config.yml
   * userspace
