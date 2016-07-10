@@ -11,6 +11,9 @@ import yaml
 import mechanize
 
 
+DEBUG = True
+
+
 def get_lease_file(current_dir, pfSenseKeySet, pfSenseCfg):
     """Login to pfSense, get DHCP Leases page and save it to a file."""
     cj = cookielib.CookieJar()
@@ -75,6 +78,8 @@ def m_pub(current_dir, mosquittoKeySet, mqttCfg, topicPath, data):
     command += "\" -m \""
     command += data
     command += "\""
+    if DEBUG:
+        print command
     comm = Popen(command, shell=True, stdout=PIPE, stderr=PIPE, stdin=PIPE)
     stdout, stderr = comm.communicate()
     return 0
