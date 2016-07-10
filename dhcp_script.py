@@ -11,7 +11,7 @@ import yaml
 import mechanize
 
 
-DEBUG = True
+DEBUG = False
 
 
 def get_lease_file(current_dir, pfSenseKeySet, pfSenseCfg):
