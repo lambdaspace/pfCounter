@@ -83,7 +83,7 @@ def m_pub(current_dir, mosquittoKeySet, mqttCfg, topicPath, data):
 def send_users(current_dir, mqttKeySet, mqttCfg, noUsers):
     """Construct /hackers subtopic & publish."""
     topic = mqttCfg['topicRoot'] + "/hackers"
-    m_publish(current_dir, mqttKeySet, mqttCfg, topic, str(noUsers))
+    m_pub(current_dir, mqttKeySet, mqttCfg, topic, str(noUsers))
     return 0
 
 
@@ -91,7 +91,7 @@ def send_new_macs(current_dir, mqttKeySet, mqttCfg, newMACs):
     """Construct /stats topic & publish."""
     topic = mqttCfg['topicRoot'] + "/stats"
     data = str(len(newMACs))
-    m_publish(current_dir, mqttKeySet, mqttCfg, topic, data)
+    m_pub(current_dir, mqttKeySet, mqttCfg, topic, data)
     return 0
 
 
