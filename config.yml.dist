@@ -6,6 +6,12 @@ macAddresses:
 pfSense:
   user : ===
   pass : ===
+pfSenseCfg:
+  url : ===
 mosquitto:
   user : ===
   pass : ===
+mqttCfg:
+  host : ===
+  topicRoot: ===
+  cafile : ===
