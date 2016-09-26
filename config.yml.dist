@@ -13,5 +13,6 @@ mosquitto:
   pass : ===
 mqttCfg:
   host : ===
+  port : ===
   topicRoot: ===
   cafile : ===
