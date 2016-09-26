@@ -66,6 +66,8 @@ def m_pub(current_dir, mosquittoKeySet, mqttCfg, topicPath, data):
     """Publish at mqtt Instance"""
     command = "mosquitto_pub -h "
     command += mqttCfg['host']
+    command += " -p "
+    command += mqttCfg['port']
     command += " -u "
     command += mosquittoKeySet['user']
     command += " -P "
